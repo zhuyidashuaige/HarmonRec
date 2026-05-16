@@ -8,20 +8,10 @@
 > joint modeling (CMDF), and a frequency-aware long-tail rebalancing strategy.
 
 <p align="center">
-  <img src="assets/framework.png" alt="HarmonRec framework" width="90%"/>
+  <img src="assets/framework.pdf" alt="HarmonRec framework" width="90%"/>
 </p>
 
-> 📌 **Where to place the framework figure**
-> Put your `framework.png` (or `.pdf` / `.jpg`) at:
->
-> ```
-> HarmonRec/assets/framework.png
-> ```
->
-> The Markdown above references `assets/framework.png` directly; once the file
-> exists in that path it will render on GitHub. We recommend a `1600×900 PNG`
-> (best for GitHub rendering) and an additional vector `PDF` if needed for
-> camera-ready use.
+
 
 ---
 
@@ -71,24 +61,14 @@ HarmonRec/
 > The exact versions used by the authors will be released together with the
 > camera-ready paper.*
 
-| Component | Version |
-|---|---|
-| Python | `>=3.10` |
-| PyTorch | *(to be filled)* |
-| CUDA | *(to be filled)* |
-| numpy | *(to be filled)* |
-| tqdm | *(to be filled)* |
-
-Install (placeholder):
 
 ```bash
 # Create a fresh environment
 conda create -n harmonrec python=3.10 -y
 conda activate harmonrec
 
-# Install PyTorch (please match your CUDA version)
-pip install torch torchvision torchaudio
-pip install numpy tqdm
+# Install PyTorch 
+pip install -r requirements.txt
 ```
 
 ---
@@ -116,9 +96,9 @@ layout and the example file naming used in the paper.
 |---|---:|---:|---:|---|
 | Music4all-onion | 116,831 | 55,008 | 38,204,151 | text / audio / visual |
 | 30Music         | 43,911  | 839,749 | 13,219,802 | text |
-| Pixel1M         | 1,001,822 | 97,505 | 19,879,192 | text / audio / visual |
+| Pixel1M         | 1,001,822 | 97,505 | 19,879,192 | text / visual |
 
-*Pre-processed splits and semantic-ID files will be released upon paper acceptance.*
+*We have released the complete pre-processed splits and semantic-ID files for the Music4all-onion dataset.*
 
 ---
 
@@ -131,22 +111,10 @@ cd python
 
 python main.py \
     --dataset music4all_onion \
-    --train_dir run1 \
+    --train_dir music4all_onion\
     --text_semantic_id_path data/text_semantic_id.txt \
     --audio_semantic_id_path data/audio_semantic_id.txt \
     --visual_semantic_id_path data/visual_semantic_id.txt \
-    --batch_size 128 \
-    --lr 0.001 \
-    --maxlen 500 \
-    --hidden_units 128 \
-    --mm_dim 128 \
-    --num_blocks 2 \
-    --num_heads 1 \
-    --dropout_rate 0.2 \
-    --num_epochs 1000 \
-    --codebook_width 512 \
-    --num_hierarchies 3 \
-    --temp 0.7 \
     --device cuda
 ```
 
@@ -174,7 +142,7 @@ cd python
 
 python main.py \
     --dataset music4all_onion \
-    --train_dir run1 \
+    --train_dir HarmonRec \
     --state_dict_path music4all_onion_run1/HarmonRec.epoch=<E>.lr=0.001.layer=2.head=1.hidden=128.maxlen=500.pth \
     --inference_only true \
     --text_semantic_id_path data/text_semantic_id.txt \
@@ -207,26 +175,8 @@ per bucket.
 
 ---
 
-## 7. Key Hyper-parameters
 
-| Argument | Meaning | Default |
-|---|---|---:|
-| `--mm_dim` | Unified multimodal target dimension. | `128` |
-| `--hidden_units` | Transformer hidden dimension (kept = `mm_dim`). | `128` |
-| `--num_blocks` | Number of Transformer blocks. | `2` |
-| `--num_heads` | Attention heads. | `1` |
-| `--maxlen` | Maximum sequence length per user. | `500` |
-| `--dropout_rate` | Dropout on embeddings and FFN. | `0.2` |
-| `--num_hierarchies` | Number of RQ codebook layers. | `3` |
-| `--codebook_width` | Codebook width (per layer). | `512` |
-| `--temp` | Softmax temperature τ for frequency-aware reweighting. | `0.7` |
-| `--lr` | Adam learning rate. | `1e-3` |
-| `--batch_size` | Mini-batch size. | `128` |
-| `--num_epochs` | Maximum number of training epochs (early-stop patience = 10). | `1000` |
-
----
-
-## 8. Reproducing the Paper
+## 7. Reproducing the Paper
 
 | Result table | Where to look |
 |---|---|
@@ -240,7 +190,7 @@ per bucket.
 
 ---
 
-## 9. Citation
+## 8. Citation
 
 If you find HarmonRec useful in your research, please consider citing:
 
@@ -257,21 +207,15 @@ If you find HarmonRec useful in your research, please consider citing:
 
 ---
 
-## 10. Acknowledgements
+## 9. Acknowledgements
 
 We thank the authors of Music4all-onion, 30Music and Pixel1M for releasing the
 datasets used in our evaluation.
 
 ---
 
-## 11. License
-
-This repository is released for academic research under the *(to be filled)*
-license. Please refer to the LICENSE file (to be added) for the exact terms.
-
----
 
 ## 12. Contact
 
 For questions, bug reports or collaboration enquiries, please open an issue
-in this repository or contact the authors at *(to be filled)*.
+in this repository or contact the authors at zhuyi@hdu.edu.cn.
