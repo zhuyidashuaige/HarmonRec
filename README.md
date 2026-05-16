@@ -8,7 +8,7 @@
 > joint modeling (CMDF), and a frequency-aware long-tail rebalancing strategy.
 
 <p align="center">
-  <img src="assets/framework.pdf" alt="HarmonRec framework" width="90%"/>
+  <img src="assets/framework.png" alt="HarmonRec framework" width="90%"/>
 </p>
 
 
