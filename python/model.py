@@ -231,30 +231,46 @@ class HarmonRec(torch.nn.Module):
         log_feats = self.last_layernorm(seqs) # (U, T, C) -> (U, -1, C)
 
         return log_feats
-    # Training forward pass: given (user_ids, log_seqs, pos_seqs, neg_seqs),
-    # compute log_feats, then take the fused embeddings of pos/neg items and
-    # dot-product with log_feats to produce pos_logits / neg_logits.
-    def forward(self, user_ids, log_seqs, pos_seqs, neg_seqs): # for training        
-        log_feats = self.log2feats(log_seqs)
-        pos_ids = torch.LongTensor(pos_seqs).to(self.dev)
-        neg_ids = torch.LongTensor(neg_seqs).to(self.dev)
-        pos_embs = self.get_item_embedding(pos_ids)    # f_pos
-        neg_embs = self.get_item_embedding(neg_ids)    # f_neg
+    # Training forward pass (in-batch negative sampling, paper Sec. III-F):
+    # Given (user_ids, log_seqs, pos_seqs), treats all unique positive items in
+    # the mini-batch as the candidate pool I_batch. For every valid (non-padding)
+    # position, compute the hybrid score z_{p,i} against every candidate and
+    # return (logits, targets) ready for nn.CrossEntropyLoss.
+    #
+    # logits : (N_valid, C)  where C = |I_batch| (unique positive items in batch)
+    # targets: (N_valid,)    index of the ground-truth item in the candidate pool
+    def forward(self, user_ids, log_seqs, pos_seqs): # for training
+        log_feats = self.log2feats(log_seqs)           # (B, T, d)
 
-        pos_logits = (log_feats * pos_embs).sum(dim=-1)  # u dot f_pos
-        neg_logits = (log_feats * neg_embs).sum(dim=-1)  # u dot f_neg
-        # collaborative-dominant additional score term
-        pos_id_base = self.item_emb(pos_ids)           # b_pos (collaborative id embedding)
-        neg_id_base = self.item_emb(neg_ids)           # b_neg
-        w_c_pos, _ = self._get_weights(pos_ids)
-        w_c_neg, _ = self._get_weights(neg_ids)
-        pos_logits = pos_logits + self.score_alpha * (w_c_pos.squeeze(-1) * (log_feats * pos_id_base).sum(dim=-1))  # + alpha * (w_c * u dot b_pos)
-        neg_logits = neg_logits + self.score_alpha * (w_c_neg.squeeze(-1) * (log_feats * neg_id_base).sum(dim=-1))  # + alpha * (w_c * u dot b_neg)
+        pos_seqs_t = torch.LongTensor(pos_seqs).to(self.dev)  # (B, T)
+        pos_flat = pos_seqs_t.reshape(-1)                      # (B*T,)
+        valid_mask = pos_flat != 0
 
-        # pos_pred = self.pos_sigmoid(pos_logits)
-        # neg_pred = self.neg_sigmoid(neg_logits)
+        # All unique positive items in the batch form the candidate pool I_batch.
+        # torch.unique returns a sorted tensor, required by searchsorted below.
+        candidate_ids = torch.unique(pos_flat[valid_mask])     # (C,)
 
-        return pos_logits, neg_logits # pos_pred, neg_pred
+        # Fused item embeddings and collaborative ID embeddings for all candidates.
+        cand_embs    = self.get_item_embedding(candidate_ids)  # (C, d)  f_i
+        cand_id_base = self.item_emb(candidate_ids)            # (C, d)  b_i
+        w_c_cand, _  = self._get_weights(candidate_ids)        # (C, 1)
+        w_c_cand     = w_c_cand.squeeze(-1)                    # (C,)
+
+        # Valid user preference vectors h_p at each non-padding position.
+        B, T = pos_seqs_t.shape
+        valid_mask_2d = (pos_seqs_t != 0)                      # (B, T)
+        user_feats    = log_feats[valid_mask_2d]               # (N_valid, d)
+        pos_valid     = pos_flat[valid_mask]                   # (N_valid,)  ground-truth ids
+
+        # Hybrid scoring: z_{p,i} = h_p^T f_i + alpha * w_id * (h_p^T b_i)
+        logits    = user_feats @ cand_embs.T                   # (N_valid, C)
+        id_logits = user_feats @ cand_id_base.T                # (N_valid, C)
+        logits    = logits + self.score_alpha * w_c_cand.unsqueeze(0) * id_logits  # (N_valid, C)
+
+        # Target: index of each ground-truth item inside the sorted candidate_ids.
+        targets = torch.searchsorted(candidate_ids, pos_valid) # (N_valid,)
+
+        return logits, targets
 
     def predict(self, user_ids, log_seqs, item_indices): # for inference
         log_feats = self.log2feats(log_seqs)
