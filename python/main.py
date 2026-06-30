@@ -259,9 +259,8 @@ if __name__ == '__main__':
         t_test = evaluate(model, dataset, args)
         print('test (NDCG@10: %.4f, Recall@10: %.4f)' % (t_test[0], t_test[1]))
     
-    # ce_criterion = torch.nn.CrossEntropyLoss()
-    # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
-    bce_criterion = torch.nn.BCEWithLogitsLoss() # torch.nn.BCELoss()
+    # ce_criterion: cross-entropy loss for in-batch negative sampling (paper Sec. III-F).
+    ce_criterion = torch.nn.CrossEntropyLoss()
     adam_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
 
     best_val_ndcg, best_val_recall = 0.0, 0.0
@@ -274,22 +273,19 @@ if __name__ == '__main__':
     for epoch in range(epoch_start_idx, args.num_epochs + 1):
         if args.inference_only: break 
         for step in range(num_batch):
-            # Inputs: user ids, sequence, positive samples, negative samples.
-            u, seq, pos, neg = sampler.next_batch() 
+            # Inputs: user ids, sequence, positive samples (neg samples unused under in-batch CE).
+            u, seq, pos, neg = sampler.next_batch()
             u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
-            # Forward pass: logits for positive and negative items.
-            pos_logits, neg_logits = model(u, seq, pos, neg)
-            pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
+            # In-batch negative sampling forward: returns (N_valid, C) logits and (N_valid,) targets.
+            logits, targets = model(u, seq, pos)
             adam_optimizer.zero_grad()
-            indices = np.where(pos != 0)
-            # BCE-with-logits loss on positive and negative samples.
-            loss = bce_criterion(pos_logits[indices], pos_labels[indices])
-            loss += bce_criterion(neg_logits[indices], neg_labels[indices])
+            # Cross-entropy loss over the in-batch candidate pool I_batch (paper Eq. 10).
+            loss = ce_criterion(logits, targets)
             # Backward + optimizer step (with optional L2 regularization on item embeddings).
-            for param in model.item_emb.parameters(): loss += args.l2_emb * torch.sum(param ** 2)    
+            for param in model.item_emb.parameters(): loss += args.l2_emb * torch.sum(param ** 2)
             loss.backward()
             adam_optimizer.step()
-            print("loss in epoch {} iteration {}: {}".format(epoch, step, loss.item())) 
+            print("loss in epoch {} iteration {}: {}".format(epoch, step, loss.item()))
 
         # Run validation every 4 epochs.
         if epoch % 4 == 0:
